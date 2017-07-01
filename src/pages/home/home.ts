@@ -59,22 +59,17 @@ export class HomePage {
   }
 
   public showOrientation() {
-    this.getOrientation().then(result => this.showToast(result, 1500, 'top'));
+    this.getOrientation().then(result => {
+      console.log(result);
+      this.showToast(result, 1500, 'top')
+    });
   }
 
   public takePicture() {
     this.cameraPreview.takePicture().then(imageData => {
-      let base64Data = imageData.toString();
-
-      this.showToast(base64Data, 1500, 'bottom');
-
-      this.base64ToGallery.base64ToGallery(base64Data, { prefix: 'bnb-corp_'}).then(result => {
-          this.showToast(result, 1500, 'bottom');
-        },
-        error => {
-          this.showToast(error, 1500, 'bottom');
-        }
-      );
+      this.savePicture(imageData, 'bnb-corp_').then(result => {
+        this.showToast(result, 1500, 'bottom');
+      });
     });
   }
 
@@ -99,6 +94,79 @@ export class HomePage {
       });
   }
 
+  private rotateImage(imageData, degrees): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let canvas = document.createElement('canvas');
+      let canvasContext = canvas.getContext('2d');
+      let image = new Image();
+
+      image.src = "data:image/jpeg;base64," + imageData;
+
+      image.onload = function() {
+
+        if ((degrees / 90) % 2 === 0) {
+          canvas.width = image.width;
+          canvas.height = image.height;
+        } else {
+          canvas.width = image.height;
+          canvas.height = image.width;
+        }
+
+        switch (degrees) {
+          case 90:
+            canvasContext.translate(canvas.width, 0);
+            break;
+          case 180:
+            canvasContext.translate(canvas.width, canvas.height);
+            break;
+          case 270:
+            canvasContext.translate(0, canvas.height);
+            break;
+        }
+
+        canvasContext.rotate(degrees * Math.PI / 180);
+        canvasContext.drawImage(image, 0, 0);
+        resolve(canvas.toDataURL());
+      }
+    });
+  }
+
+  private savePicture(imageData, namePrefix): Promise<string> {
+    return new Promise((resolve) => {
+      this.getOrientation().then(orientation => {
+
+        if (orientation == 'portrait') {
+          this.base64ToGallery.base64ToGallery(imageData.toString(), {prefix: namePrefix}).then(result => {
+              resolve(result);
+            },
+            error => {
+              resolve(error);
+            }
+          );
+        } else {
+          let rotation;
+
+          if(orientation == 'landscape')
+            rotation = 270;
+          else if (orientation == 'portrait-reversed')
+            rotation = 180;
+          else
+            rotation = 90;
+
+          this.rotateImage(imageData[0], rotation).then(base64Data => {
+            this.base64ToGallery.base64ToGallery(base64Data, { prefix: namePrefix}).then(result => {
+                resolve(result)
+              },
+              error => {
+                resolve(error);
+              }
+            );
+          });
+        }
+      });
+    });
+  }
+
   private showToast(message: string, duration: number, position: string) {
     this.toastCtrl.create({
       message: message,
@@ -106,39 +174,4 @@ export class HomePage {
       position: position
     }).present();
   }
-
-  private rotateBase64Image(base64Data, degrees): Promise<string>{
-        return new Promise((resolve) => {
-          let canvas = document.createElement('canvas');
-          let canvasContext = canvas.getContext('2d');
-          let image = new Image();
-
-          let that = this;
-
-          image.src = base64Data;
-          image.onload = function() {
-            canvasContext.translate(image.width, image.height);
-            canvasContext.rotate(degrees * Math.PI / 180);
-            canvasContext.drawImage(image, 0, 0);
-            that.showToast(canvas.toDataURL(), 3000, 'top');
-            resolve(canvas.toDataURL());
-          };
-        });
-  }
-
-  // public rotateBase64Image(base64ImageSrc) {
-  //   var canvas = document.createElement("canvas");
-  //   var img = new Image();
-  //   img.src = base64ImageSrc;
-  //   canvas.width = img.width;
-  //   canvas.height = img.height;
-  //   var context = canvas.getContext("2d");
-  //   context.translate(img.width * 0.5, img.height * 0.5);
-  //   context.rotate(0.5 * Math.PI);
-  //   context.translate(-img.height * 0.5, -img.width * 0.5);
-  //   context.drawImage(img, 0, 0);
-  //   this.showToast(canvas.toDataURL().toString(), 1000, 'top');
-  //   return canvas.toDataURL();
-  // }
-
 }
